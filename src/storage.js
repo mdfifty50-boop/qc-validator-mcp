@@ -1,37 +1,44 @@
 // ═══════════════════════════════════════════
-// In-memory storage for QC validation data
+// SQLite-backed storage for QC validation data
 // ═══════════════════════════════════════════
 
-// agent_id -> { validations: [{timestamp, output_hash, score, pass, issues_count, issues}], stats_cache }
-const agentValidations = new Map();
+import { getDb } from './db.js';
 
 /**
  * Log a validation result for an agent.
  */
 export function logValidation(agent_id, { output_hash, score, pass, issues_count, issues = [] }) {
-  if (!agentValidations.has(agent_id)) {
-    agentValidations.set(agent_id, { validations: [] });
+  const db = getDb();
+
+  // Keep last 500 validations per agent — delete oldest if over limit
+  const count = db.prepare('SELECT COUNT(*) AS cnt FROM validations WHERE agent_id = ?').get(agent_id).cnt;
+  if (count >= 500) {
+    const oldest = db.prepare(
+      'SELECT id FROM validations WHERE agent_id = ? ORDER BY created_at ASC LIMIT ?'
+    ).all(agent_id, count - 499);
+    const del = db.prepare('DELETE FROM validations WHERE id = ?');
+    for (const row of oldest) del.run(row.id);
   }
 
-  const entry = agentValidations.get(agent_id);
-  entry.validations.push({
-    timestamp: new Date().toISOString(),
+  db.prepare(`
+    INSERT INTO validations (agent_id, output_hash, score, pass, issues_count, issues_json, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    agent_id,
     output_hash,
     score,
-    pass,
+    pass ? 1 : 0,
     issues_count,
-    issues,
-  });
+    JSON.stringify(issues),
+    new Date().toISOString()
+  );
 
-  // Keep last 500 validations per agent
-  if (entry.validations.length > 500) {
-    entry.validations = entry.validations.slice(-500);
-  }
+  const total = db.prepare('SELECT COUNT(*) AS cnt FROM validations WHERE agent_id = ?').get(agent_id).cnt;
 
   return {
     logged: true,
     agent_id,
-    total_validations: entry.validations.length,
+    total_validations: total,
   };
 }
 
@@ -39,8 +46,12 @@ export function logValidation(agent_id, { output_hash, score, pass, issues_count
  * Get failure patterns for a specific agent.
  */
 export function getFailurePatterns(agent_id) {
-  const entry = agentValidations.get(agent_id);
-  if (!entry || entry.validations.length === 0) {
+  const db = getDb();
+  const rows = db.prepare(
+    'SELECT score, pass, issues_json FROM validations WHERE agent_id = ? ORDER BY created_at ASC'
+  ).all(agent_id);
+
+  if (rows.length === 0) {
     return {
       agent_id,
       total_validations: 0,
@@ -52,16 +63,16 @@ export function getFailurePatterns(agent_id) {
     };
   }
 
-  const vals = entry.validations;
-  const total = vals.length;
-  const passes = vals.filter((v) => v.pass).length;
+  const total = rows.length;
+  const passes = rows.filter((r) => r.pass === 1).length;
   const passRate = Math.round((passes / total) * 100);
-  const avgScore = Math.round(vals.reduce((s, v) => s + v.score, 0) / total);
+  const avgScore = Math.round(rows.reduce((s, r) => s + r.score, 0) / total);
 
   // Aggregate issue types
   const issueCounts = new Map();
-  for (const v of vals) {
-    for (const issue of v.issues) {
+  for (const row of rows) {
+    const issues = JSON.parse(row.issues_json || '[]');
+    for (const issue of issues) {
       const t = issue.type || 'unknown';
       issueCounts.set(t, (issueCounts.get(t) || 0) + 1);
     }
@@ -80,8 +91,8 @@ export function getFailurePatterns(agent_id) {
   let trend = 'stable';
   if (total >= 8) {
     const quarter = Math.floor(total / 4);
-    const earlyAvg = vals.slice(0, quarter).reduce((s, v) => s + v.score, 0) / quarter;
-    const lateAvg = vals.slice(-quarter).reduce((s, v) => s + v.score, 0) / quarter;
+    const earlyAvg = rows.slice(0, quarter).reduce((s, r) => s + r.score, 0) / quarter;
+    const lateAvg = rows.slice(-quarter).reduce((s, r) => s + r.score, 0) / quarter;
     const diff = lateAvg - earlyAvg;
     if (diff > 5) trend = 'improving';
     else if (diff < -5) trend = 'degrading';
@@ -101,7 +112,10 @@ export function getFailurePatterns(agent_id) {
  * Generate a quality report across all agents.
  */
 export function generateQualityReport() {
-  const agents = [...agentValidations.keys()];
+  const db = getDb();
+  const agentRows = db.prepare('SELECT DISTINCT agent_id FROM validations').all();
+  const agents = agentRows.map((r) => r.agent_id);
+
   if (agents.length === 0) {
     return {
       total_agents: 0,
@@ -127,12 +141,9 @@ export function generateQualityReport() {
   });
 
   // Overall stats
-  let totalVals = 0;
-  let totalPasses = 0;
-  for (const entry of agentValidations.values()) {
-    totalVals += entry.validations.length;
-    totalPasses += entry.validations.filter((v) => v.pass).length;
-  }
+  const totals = db.prepare('SELECT COUNT(*) AS total, SUM(pass) AS passes FROM validations').get();
+  const totalVals = totals.total;
+  const totalPasses = totals.passes || 0;
   const overallPassRate = totalVals > 0 ? Math.round((totalPasses / totalVals) * 100) : 0;
 
   // Sort for best/worst
