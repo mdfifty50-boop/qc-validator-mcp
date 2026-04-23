@@ -1,0 +1,43 @@
+{
+  "serverInfo": {
+    "name": "qc-validator-mcp",
+    "version": "0.1.0",
+    "description": "Runtime quality validation for AI agent outputs — hallucination detection, scope compliance checks, and output quality scoring",
+    "author": "THRONE AI",
+    "license": "MIT",
+    "homepage": "https://github.com/mdfifty50-boop/qc-validator-mcp",
+    "repository": "https://github.com/mdfifty50-boop/qc-validator-mcp"
+  },
+  "capabilities": {
+    "tools": [
+      { "name": "validate_output", "description": "Score agent output quality against configurable criteria — length, keywords, forbidden patterns, claim density" },
+      { "name": "check_hallucination_risk", "description": "Estimate hallucination likelihood with source-grounded or heuristic analysis" },
+      { "name": "check_scope_compliance", "description": "Validate output against a scope contract — allowed/forbidden topics, word limits, required sections" },
+      { "name": "log_validation", "description": "Store validation results for per-agent trending and failure pattern analysis" },
+      { "name": "get_failure_patterns", "description": "Analyze common failure modes for a specific agent with pass rate, trends, and top issues" },
+      { "name": "generate_quality_report", "description": "Quality dashboard for all agents — pass rates, worst/best performers, recommendations" }
+    ],
+    "resources": [
+      { "uri": "qc://dashboard", "description": "Quality metrics dashboard for all validated agents" }
+    ]
+  },
+  "categories": ["quality-control", "validation", "monitoring", "agentic-engineering"],
+  "keywords": ["hallucination-detection", "scope-compliance", "output-validation", "quality-scoring", "ai-agent", "reliability"],
+  "pricing": {
+    "free_tier": true,
+    "free_limit": "Unlimited validations, in-memory only",
+    "pro": "$99/month — persistent storage, webhook alerts, multi-tenant",
+    "enterprise": "$499/month — SSO, audit logs, custom validation rules, SLA"
+  },
+  "install": {
+    "npm": "npx qc-validator-mcp",
+    "claude_desktop": {
+      "mcpServers": {
+        "qc-validator": {
+          "command": "npx",
+          "args": ["qc-validator-mcp"]
+        }
+      }
+    }
+  }
+}

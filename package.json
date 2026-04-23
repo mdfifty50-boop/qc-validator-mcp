@@ -1,0 +1,39 @@
+{
+  "name": "qc-validator-mcp",
+  "version": "0.1.0",
+  "mcpName": "io.github.mdfifty50-boop/qc-validator",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mdfifty50-boop/qc-validator-mcp"
+  },
+  "description": "MCP server for runtime quality validation of AI agent outputs — hallucination detection, scope compliance, and output quality scoring",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "qc-validator-mcp": "src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test src/**/*.test.js"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "quality-control",
+    "hallucination-detection",
+    "scope-compliance",
+    "ai-agent",
+    "output-validation",
+    "agentic-engineering",
+    "model-context-protocol"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.24.0"
+  }
+}
